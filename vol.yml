@@ -1,0 +1,43 @@
+---
+
+- name: Network Getting Started First Playbook
+##############  connection: ansible.netcommon.network_cli
+  gather_facts: false
+  hosts: all
+  tasks:
+
+#   - name: Add epel-release repo
+#     yum:
+#      name: epel-release
+#      state: present
+
+   - name: Get AWS facts
+     amazon.aws.ec2_metadata_facts:
+
+   - name: Gather information about all instances
+     community.aws.ec2_instance_info:
+      region: us-east-1
+      instance_ids: i-0ae3a4079c4033f70
+#      region: "{{ aws_region }}"
+#      instance_ids: "{{ inststance_id_raw.content }}"
+     register: ec2_facts
+
+   - name: determine if we are on a nitro hypervisor
+     ansible.builtin.set_fact:
+      use_nitro: "{{ ansible_ec2_instance_type.startswith('t3') or ansible_ec2_instance_type.startswith('t4') or ansible_ec2_instance_type.startswith('c5') or ansible_ec2_instance_type.startswith('m5') or ansible_ec2_instance_type.startswith('r5') }}"
+
+   - name: get list of attached volumes
+     ansible.builtin.shell: INSTANCE=$(curl -q http://169.254.169.254/latest/meta-data/instance-id); REGION=$(curl -q http://169.254.169.254/latest/meta-data/placement/availability-zone); /usr/local/bin/aws ec2 describe-volumes --region ${REGION%?} --filters "Name=attachment.instance-id,Values=$INSTANCE"
+     register: volume_list
+
+   - name: get the tags for volumes
+     ansible.builtin.shell: REGION=$(curl -q http://169.254.169.254/latest/meta-data/placement/availability-zone); /usr/local/bin/aws ec2 describe-tags --region ${REGION%?} --filters "Name=resource-id,Values={{ (ec2_volumes | dict2items ) | community.general.json_query('[*].key') | join(',')}}" "Name=key,Values=Name"
+     register: tag_list
+     when: ec2_volumes
+
+   - name: Report some info
+     debug:
+      msg: "This instance is a {{ ansible_ec2_instance_type }} "
+     when: ansible_ec2_instance_type  == "t1.micro"
+
+ 

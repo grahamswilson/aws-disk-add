@@ -1,0 +1,80 @@
+---
+
+- name: Disk work
+  gather_facts: false
+  hosts: all
+  tasks:
+
+   - name: get EC2 facts
+     amazon.aws.ec2_metadata_facts:
+
+   - name: get the list of tags
+     ansible.builtin.shell: REGION=$(curl -q http://169.254.169.254/latest/meta-data/placement/availability-zone) INSTANCE=$(curl -q http://169.254.169.254/latest/meta-data/instance-id); /usr/local/bin/aws ec2 describe-tags --region ${REGION%?} --filters "Name=resource-id,Values=$INSTANCE"
+     register: tag_list
+
+   - name: create facts out of tags 
+     ansible.builtin.set_fact:
+       ec2_tags: "{{ ec2_tags| default([]) + [{ 'Key': tag.Key, 'Value': tag.Value }]}}"
+     with_items: "{{ (tag_list.stdout | from_json)['Tags'] }}"
+     loop_control:
+       loop_var: tag
+       label: "{{ tag.Key }}"
+
+   - name: get list of attached volumes
+     ansible.builtin.shell: INSTANCE=$(curl -q http://169.254.169.254/latest/meta-data/instance-id); REGION=$(curl -q http://169.254.169.254/latest/meta-data/placement/availability-zone); /usr/local/bin/aws ec2 describe-volumes --region ${REGION%?} --filters "Name=attachment.instance-id,Values=$INSTANCE"
+     register: volume_list
+
+   - name: init volumes list
+     ansible.builtin.set_fact:
+       ec2_volumes: {}
+
+   - name: create a list of volumes
+     ansible.builtin.set_fact:
+       ec2_volumes: "{{ ec2_volumes | combine ( {volume.VolumeId: { \"Device\": volume.Attachments[0].Device }}) }}"
+#####     when: volume.Attachments[0].Device != "/dev/sda1"
+     loop: "{{ (volume_list.stdout| from_json).Volumes }}"
+     loop_control:
+       loop_var: volume
+       label: "{{ volume.VolumeId }}"
+
+   - name: get the tags for volumes
+     ansible.builtin.shell: REGION=$(curl -q http://169.254.169.254/latest/meta-data/placement/availability-zone); /usr/local/bin/aws ec2 describe-tags --region ${REGION%?} --filters "Name=resource-id,Values={{ (ec2_volumes | dict2items ) | community.general.json_query('[*].key') | join(',')}}" "Name=key,Values=Name"
+     register: tag_list
+     when: ec2_volumes
+
+   - name: record volumes
+     ansible.builtin.set_fact:
+       ec2_volumes: "{{ ec2_volumes | combine( { volume.ResourceId: { volume.Key: volume.Value }}, recursive=True) }}"
+     loop: "{{ (tag_list.stdout|default('{}')| from_json)['Tags']}}"
+     loop_control:
+       loop_var: volume
+       label: "{{ volume.Value }}"
+     when: ec2_volumes and tag_list is defined and tag_list.stdout is defined
+
+   - name: "get az"
+     ansible.builtin.uri:
+       url: "http://169.254.169.254/latest/meta-data/placement/availability-zone"
+       return_content: true
+     register: az_raw
+
+   - name: "set region"
+     ansible.builtin.set_fact:
+       aws_region: "{{ az_raw.content[0:-1] }}"
+
+   - name: get instance id
+     ansible.builtin.uri:
+       url: "http://169.254.169.254/latest/meta-data/instance-id"
+       return_content: true
+     register: inststance_id_raw
+
+   - name: get ec2 instance facts
+     community.aws.ec2_instance_info:
+       region: "{{ aws_region }}"
+       instance_ids: "{{ inststance_id_raw.content }}"
+     register: ec2_facts
+
+   - name: Report some info
+     debug:
+      msg: "This instance is a {{ ansible_ec2_instance_type }} {{ ec2_volumes }}"
+#     when: ansible_ec2_instance_type  == "t1.micro"
+

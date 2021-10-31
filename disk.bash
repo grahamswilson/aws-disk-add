@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -xv
+#set -xv
 
 add_new_disk () {
 
@@ -29,9 +29,9 @@ do
 
 if [[ " ${volumes[*]} " =~ " /dev/sd${newdiskname} " ]];
 then
-        echo /dev/sd${newdiskname} is already attached to this instace.
+echo /dev/sd${newdiskname} is already attached to this instace.
 else
-        break
+break
 fi
 done
 
@@ -102,8 +102,12 @@ case $1 in
 
 	if [[ ! -f /usr/local/bin/aws ]]
 	then
-	echo Looks like you need to install AWS CLI
-	exit
+	echo Looks like you need to install AWS CLI so let me take care of that for you
+	cd /tmp
+	yum install -y unzip
+	curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+	unzip awscliv2.zip
+	./aws/install
 	fi
 
 	/usr/local/bin/aws ec2 describe-instances > /dev/null 2>&1

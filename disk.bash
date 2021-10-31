@@ -12,6 +12,14 @@ CURRENTDISKS=($(lsblk -a | grep -v ^NAME | grep -v ^'├' | grep -v ^'└' | awk
 
 echo ${CURRENTDISKS[@]}
 
+# Get my instance type - so we know if we are Nitro or not
+TYPE=$(curl -q -s http://169.254.169.254/latest/meta-data/instance-type)
+
+if [[ "${type:0:2}" == "t3" ]] || [[ "${type:0:2}" == "t4" ]] || [[ "${type:0:2}" == "c5" ]] || [[ "${type:0:2}" == "m5" ]] || [[ "${type:0:2}" == "r5" ]]
+then
+MYTYPE=nitro
+fi
+
 # Get my AWS Instance-ID
 INSTANCE=$(curl -q -s http://169.254.169.254/latest/meta-data/instance-id)
 
@@ -100,6 +108,19 @@ case $1 in
 
   add)
 
+	if [[ ! -f /usr/local/bin/aws ]]
+	then
+	echo Looks like you need to install AWS CLI
+	exit
+	fi
+
+	/usr/local/bin/aws ec2 describe-instances > /dev/null 2>&1
+	if [[ "$?" == "254" ]]
+	then
+	echo Looks like you may need to fix AWS CLI permissions
+	exit
+	fi
+	
 	SIZE=$2
 	if [[ $SIZE == "" ]]
 	then

@@ -2,7 +2,6 @@
 
 set -xv
 
-
 case $1 in
 
   add)
@@ -14,11 +13,11 @@ case $1 in
 	exit
 	fi
 
-	if [[ $SIZE =~ [0-9] ]] | [[ $SIZE == *"." ]]
+	if [ "$SIZE" -eq "$SIZE" ] && [[ "$SIZE" != "0" ]] 2> /dev/null
 	then
-	echo "Input contains number"
+	echo "Input contains integer"
 	else
-	echo "Input contains non numerical value"
+	echo "Input is not a non zero integer"
 	exit
 	fi
 
@@ -40,6 +39,13 @@ case $1 in
 esac
 
 
+if [[ $ACTION == "add" ]]
+then
+
+CURRENTDISKS=($(lsblk -a | grep -v ^NAME | grep -v ^'├' | grep -v ^'└' | awk '{print $1}'))
+
+echo ${CURRENTDISKS[@]}
+
 INSTANCE=$(curl -q -s http://169.254.169.254/latest/meta-data/instance-id)
 REGION=$(curl -q -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
 
@@ -60,10 +66,25 @@ done
 
 echo /dev/sd${newdiskname} is available for use.
 
-VOLUME=$(/usr/local/bin/aws ec2 create-volume --availability-zone ${REGION} --size 50 --volume-type gp2 --tag-specifications "ResourceType=volume,Tags=[{Key=Name,Value=${newdiskname}}]" | grep \"VolumeId\"\:  | awk '{print $2}' | sed 's/[",]//g')
+VOLUME=$(/usr/local/bin/aws ec2 create-volume --availability-zone ${REGION} --size ${SIZE} --volume-type gp2 --tag-specifications "ResourceType=volume,Tags=[{Key=Name,Value=${newdiskname}}]" | grep \"VolumeId\"\:  | awk '{print $2}' | sed 's/[",]//g')
 
 /usr/local/bin/aws ec2 wait volume-available --volume-ids ${VOLUME}
 
 /usr/local/bin/aws ec2 attach-volume --volume-id ${VOLUME} --device /dev/sd${newdiskname} --instance-id ${INSTANCE}
 
 /usr/local/bin/aws ec2 wait volume-in-use --volume-ids ${VOLUME}
+
+sleep 2
+
+lsblk -a | grep -v ^NAME | grep -v ^'├' | grep -v ^'└' | awk '{print $1}'
+
+NEWDISKS=($(lsblk -a | grep -v ^NAME | grep -v ^'├' | grep -v ^'└' | awk '{print $1}'))
+
+echo ${NEWDISKS[@]}
+
+NEWDEVICE=($(echo ${NEWDISKS[@]} ${CURRENTDISKS[@]} | tr ' ' '\n' | sort | uniq -u))
+
+echo $NEWDEVICE
+
+
+fi

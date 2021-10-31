@@ -15,10 +15,10 @@ echo ${CURRENTDISKS[@]}
 # Get my AWS Instance-ID
 INSTANCE=$(curl -q -s http://169.254.169.254/latest/meta-data/instance-id)
 
-$ Get what AWS Region I am in
+# Get what AWS Region I am in
 REGION=$(curl -q -s http://169.254.169.254/latest/meta-data/placement/availability-zone)
 
-$ Get a list of current AWS volumes I have
+# Get a list of current AWS volumes I have
 volumes=($(/usr/local/bin/aws ec2 describe-volumes --region ${REGION%?} --filters "Name=attachment.instance-id,Values=$INSTANCE" | grep \"Device\"\:  | awk '{print $2}' | sed 's/[",]//g'))
 
 echo ${volumes[*]}

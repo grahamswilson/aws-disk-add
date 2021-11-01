@@ -78,10 +78,12 @@ echo No partition necessary for XFS
 # Assumine the use of xfs but could add lvm2 - if its installed - to do pvcreate etc
 mkfs.xfs /dev/${NEWDEVICE}
 mkdir $MOUNT
+UUID=($(xfs_admin -u /dev/$NEWDEVICE | sed 's/\ //g' | cut -f2 -d"="))
 cat >> /etc/fstab << EOF
-/dev/$NEWDEVICE	$MOUNT		xfs    defaults        1 2
+UUID=${UUID}	$MOUNT		xfs    defaults        1 2
+#/dev/$NEWDEVICE	$MOUNT          xfs    defaults        1 2
 EOF
-mount -a
+mount $MOUNT
 else
 echo Disk seems to have a partition so existing rapidly
 exit
@@ -111,7 +113,7 @@ case $1 in
 	fi
 
 	/usr/local/bin/aws ec2 describe-instances > /dev/null 2>&1
-	if [[ "$?" == "254" ]]
+	if [[ "$?" != "0" ]]
 	then
 	echo Looks like you may need to fix AWS CLI permissions
 	exit

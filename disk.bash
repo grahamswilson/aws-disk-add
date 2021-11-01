@@ -24,7 +24,7 @@ volumes=($(/usr/local/bin/aws ec2 describe-volumes --region ${REGION%?} --filter
 echo ${volumes[*]}
 
 # Looping through possible new AWS volume device names searching for the first one that isn't in my current list of attached volumes
-for newdiskname in f g h i j k l m n o p q r s t u v w x z y
+for newdiskname in f g h i j k l m n o p q r s t u v w x y z
 do
 
 if [[ " ${volumes[*]} " =~ " /dev/sd${newdiskname} " ]];
@@ -49,16 +49,31 @@ VOLUME=$(/usr/local/bin/aws ec2 create-volume --availability-zone ${REGION} --si
 # Lets wait for that to finish before moving on
 /usr/local/bin/aws ec2 wait volume-in-use --volume-ids ${VOLUME}
 
-# Now we saw that sometimes it takes a second or two for a new OS device file to be created so lets wait 2 seconds
-sleep 2
-
-# Now we get an updated list of disks
+# Now we saw that sometimes it takes a second or two for a new OS device file to be created so lets wait before giving up...
+for count in {1..30}
+do 
 NEWDISKS=($(lsblk -a | grep -v ^NAME | grep -v ^'├' | grep -v ^'└' | awk '{print $1}'))
+echo ${NEWDSISKS[@]}
+if [[ "${NEWDISKS[@]}" ==  "${CURRENTDISKS[@]}" ]]
+then
+echo sleeping for 1 second
+sleep 1
+else
+break
+fi
+done
 
 # Now we just compare this new list with the original list and anything new must be our new disk
 NEWDEVICE=($(echo ${NEWDISKS[@]} ${CURRENTDISKS[@]} | tr ' ' '\n' | sort | uniq -u))
 
 echo ${NEWDEVICE[@]}
+
+# If after waiting we still dont see any new device, we need to exit
+if [[ "${NEWDEVICE[@]}" == "" ]]
+then
+echo No new device file found after waiting
+exit
+fi
 
 # Lets just double check there is only one NEWDEVICE and if not lets exit as something isn't right
 if [[ `echo ${NEWDEVICE[@]} | awk '{print $2}'` == "" ]]
@@ -78,7 +93,7 @@ echo No partition necessary for XFS
 # Assumine the use of xfs but could add lvm2 - if its installed - to do pvcreate etc
 mkfs.xfs /dev/${NEWDEVICE}
 mkdir $MOUNT
-UUID=($(xfs_admin -u /dev/$NEWDEVICE | sed 's/\ //g' | cut -f2 -d"="))
+UUID=($(xfs_admin -u /dev/${NEWDEVICE} | sed 's/\ //g' | cut -f2 -d"="))
 cat >> /etc/fstab << EOF
 UUID=${UUID}	$MOUNT		xfs    defaults        1 2
 #/dev/$NEWDEVICE	$MOUNT          xfs    defaults        1 2

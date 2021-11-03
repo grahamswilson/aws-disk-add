@@ -125,6 +125,9 @@ case $1 in
 	curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 	unzip awscliv2.zip
 	./aws/install
+	rm -f /tmp/awscliv2.zip
+	rm -rf /tmp/aws
+	cd ~
 	fi
 
 	/usr/local/bin/aws ec2 describe-instances > /dev/null 2>&1

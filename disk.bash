@@ -27,15 +27,15 @@ echo ${volumes[*]}
 for newdiskname in f g h i j k l m n o p q r s t u v w x y z
 do
 
-if [[ " ${volumes[*]} " =~ " /dev/sd${newdiskname} " ]];
+if [[ " ${volumes[*]} " =~ " /dev/sd${newdiskname} " ]] || [[ " ${volumes[*]} " =~ " /dev/xvd${newdiskname} " ]]
 then
-echo /dev/sd${newdiskname} is already attached to this instace.
+echo Either /dev/sd${newdiskname} or /dev/xvd${newdiskname} is already attached to this instace.
 else
 break
 fi
 done
 
-echo /dev/sd${newdiskname} is available for use.
+echo /dev/sd${newdiskname} or  /dev/xvd${newdiskname} is available for use.
 
 # Now lets create a new volume with that unused AWS device name
 VOLUME=$(/usr/local/bin/aws ec2 create-volume --availability-zone ${REGION} --size ${SIZE} --volume-type gp2 --tag-specifications "ResourceType=volume,Tags=[{Key=Name,Value=${newdiskname}}]" | grep \"VolumeId\"\:  | awk '{print $2}' | sed 's/[",]//g')
@@ -43,7 +43,7 @@ VOLUME=$(/usr/local/bin/aws ec2 create-volume --availability-zone ${REGION} --si
 # Lets wait for that to finish before moving on
 /usr/local/bin/aws ec2 wait volume-available --volume-ids ${VOLUME}
 
-# Now attach the new volume to me
+# Now attach the new volume to me - note we choose the /dev/sd prefix as that is preferred
 /usr/local/bin/aws ec2 attach-volume --volume-id ${VOLUME} --device /dev/sd${newdiskname} --instance-id ${INSTANCE}
 
 # Lets wait for that to finish before moving on
